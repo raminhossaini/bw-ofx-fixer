@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OFX Fixer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      margin-top: 0.5rem;
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 860px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #334155;
+      border-radius: 12px;
+      padding: 2.5rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #1e2130;
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: #6366f1;
+      background: #1e2040;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .drop-zone-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    .drop-zone p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .drop-zone strong {
+      color: #a5b4fc;
+    }
+
+    /* Panels */
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 640px) {
+      .panels { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .panel-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+    }
+
+    textarea {
+      width: 100%;
+      height: 340px;
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-family: 'SFMono-Regular', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      padding: 1rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      border-color: #6366f1;
+    }
+
+    textarea::placeholder {
+      color: #475569;
+    }
+
+    /* Stats bar */
+    .stats {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      background: #1e2130;
+      border: 1px solid #2d3348;
+      border-radius: 10px;
+      padding: 0.9rem 1.25rem;
+      font-size: 0.82rem;
+      color: #94a3b8;
+      display: none;
+    }
+
+    .stats.visible { display: flex; }
+
+    .stat span {
+      font-weight: 700;
+      color: #a5b4fc;
+    }
+
+    /* Buttons */
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.6rem 1.25rem;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+
+    .btn-secondary {
+      background: #2d3348;
+      color: #e2e8f0;
+    }
+
+    .btn-secondary:hover:not(:disabled) { background: #38405c; }
+
+    .btn-success {
+      background: #166534;
+      color: #bbf7d0;
+    }
+
+    .btn-success:hover:not(:disabled) { background: #15803d; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #22c55e;
+      color: #052e16;
+      padding: 0.65rem 1.2rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    footer {
+      margin-top: 3rem;
+      color: #334155;
+      font-size: 0.78rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>OFX Fixer</h1>
+  <p>Converts <code>DR</code>/<code>CR</code> transaction types to OFX-compliant <code>DEBIT</code>/<code>CREDIT</code> and fixes debit amounts.</p>
+</header>
+
+<div class="container">
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".ofx,.qfx,.txt" />
+    <span class="drop-zone-icon">📂</span>
+    <p><strong>Click to upload</strong> or drag &amp; drop an OFX file</p>
+    <p style="margin-top:0.3rem">or paste your OFX content directly into the Input box below</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" id="stats">
+    <div class="stat">Debits fixed: <span id="statDebits">0</span></div>
+    <div class="stat">Credits fixed: <span id="statCredits">0</span></div>
+    <div class="stat">Amounts negated: <span id="statNegated">0</span></div>
+  </div>
+
+  <!-- Panels -->
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-label">Input — Original OFX</div>
+      <textarea id="inputArea" placeholder="Paste your OFX content here…" spellcheck="false"></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-label">Output — Fixed OFX</div>
+      <textarea id="outputArea" placeholder="Fixed output will appear here…" readonly spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn-primary" id="fixBtn">⚡ Fix OFX</button>
+    <button class="btn-secondary" id="clearBtn">✕ Clear</button>
+    <button class="btn-success" id="copyBtn" disabled>⎘ Copy Output</button>
+    <button class="btn-success" id="downloadBtn" disabled>⬇ Download Fixed File</button>
+  </div>
+
+</div>
+
+<footer>All processing happens in your browser — no data is sent anywhere.</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const inputArea    = document.getElementById('inputArea');
+  const outputArea   = document.getElementById('outputArea');
+  const fixBtn       = document.getElementById('fixBtn');
+  const clearBtn     = document.getElementById('clearBtn');
+  const copyBtn      = document.getElementById('copyBtn');
+  const downloadBtn  = document.getElementById('downloadBtn');
+  const dropZone     = document.getElementById('dropZone');
+  const fileInput    = document.getElementById('fileInput');
+  const stats        = document.getElementById('stats');
+  const statDebits   = document.getElementById('statDebits');
+  const statCredits  = document.getElementById('statCredits');
+  const statNegated  = document.getElementById('statNegated');
+  const toast        = document.getElementById('toast');
+
+  let downloadFilename = 'fixed.ofx';
+
+  // ── Core fix logic ──────────────────────────────────────────────────────────
+  function fixOFX(raw) {
+    let debits = 0, credits = 0, negated = 0;
+
+    // We process line by line, tracking whether we're in a STMTTRN block
+    // and what the current TRNTYPE is.
+    const lines = raw.split(/\r?\n/);
+    const out = [];
+
+    // We need a two-pass approach: collect each transaction block, fix it,
+    // then emit. Instead, we do a stateful single pass.
+    //
+    // State:
+    //   pendingType  – the fixed TRNTYPE for the current block (null if outside)
+    //   typeLineIdx  – index in `out` where TRNTYPE was emitted (so we can patch)
+
+    let pendingType = null;   // 'DEBIT' | 'CREDIT' | other
+    let typeLineIdx = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Detect TRNTYPE
+      const typeMatch = trimmed.match(/^<TRNTYPE>(.+)$/i);
+      if (typeMatch) {
+        const raw_type = typeMatch[1].trim().toUpperCase();
+        let fixedType = raw_type;
+
+        if (raw_type === 'DR') {
+          fixedType = 'DEBIT';
+          debits++;
+        } else if (raw_type === 'CR') {
+          fixedType = 'CREDIT';
+          credits++;
+        }
+
+        pendingType = fixedType;
+        typeLineIdx = out.length;
+        // Reconstruct with same indentation
+        const indent = line.match(/^(\s*)/)[1];
+        out.push(indent + '<TRNTYPE>' + fixedType);
+        continue;
+      }
+
+      // Detect TRNAMT — only negate if current block is DEBIT
+      const amtMatch = trimmed.match(/^<TRNAMT>(.+)$/i);
+      if (amtMatch && pendingType === 'DEBIT') {
+        const rawAmt = amtMatch[1].trim();
+        const num = parseFloat(rawAmt);
+        const indent = line.match(/^(\s*)/)[1];
+        if (!isNaN(num) && num > 0) {
+          out.push(indent + '<TRNAMT>-' + rawAmt);
+          negated++;
+        } else {
+          out.push(line);
+        }
+        continue;
+      }
+
+      // Detect end of transaction block
+      if (trimmed.match(/^<\/STMTTRN>/i)) {
+        pendingType = null;
+        typeLineIdx = null;
+      }
+
+      out.push(line);
+    }
+
+    return { fixed: out.join('\n'), debits, credits, negated };
+  }
+
+  // ── UI helpers ──────────────────────────────────────────────────────────────
+  function showToast(msg, color = '#22c55e') {
+    toast.textContent = msg;
+    toast.style.background = color;
+    toast.style.color = color === '#22c55e' ? '#052e16' : '#fff';
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2200);
+  }
+
+  function setOutputEnabled(enabled) {
+    copyBtn.disabled = !enabled;
+    downloadBtn.disabled = !enabled;
+  }
+
+  function loadText(text, filename) {
+    inputArea.value = text;
+    downloadFilename = filename
+      ? filename.replace(/(\.[^.]+)$/, '_fixed$1')
+      : 'fixed.ofx';
+    runFix();
+  }
+
+  function runFix() {
+    const raw = inputArea.value.trim();
+    if (!raw) { showToast('Paste or upload an OFX file first.', '#f59e0b'); return; }
+
+    const { fixed, debits, credits, negated } = fixOFX(raw);
+    outputArea.value = fixed;
+
+    statDebits.textContent  = debits;
+    statCredits.textContent = credits;
+    statNegated.textContent = negated;
+    stats.classList.add('visible');
+
+    setOutputEnabled(true);
+    showToast(`Fixed: ${debits} debits, ${credits} credits, ${negated} amounts negated.`);
+  }
+
+  // ── Event listeners ─────────────────────────────────────────────────────────
+  fixBtn.addEventListener('click', runFix);
+
+  clearBtn.addEventListener('click', () => {
+    inputArea.value = '';
+    outputArea.value = '';
+    stats.classList.remove('visible');
+    setOutputEnabled(false);
+  });
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(outputArea.value)
+      .then(() => showToast('Copied to clipboard!'))
+      .catch(() => {
+        outputArea.select();
+        document.execCommand('copy');
+        showToast('Copied to clipboard!');
+      });
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const blob = new Blob([outputArea.value], { type: 'application/x-ofx' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = downloadFilename;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // File input
+  fileInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => loadText(ev.target.result, file.name);
+    reader.readAsText(file);
+    fileInput.value = '';
+  });
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => loadText(ev.target.result, file.name);
+    reader.readAsText(file);
+  });
+
+  // Sync scroll bidirectionally
+  let syncingScroll = false;
+  function syncScroll(source, target) {
+    if (syncingScroll) return;
+    syncingScroll = true;
+    const pct = source.scrollTop / (source.scrollHeight - source.clientHeight);
+    target.scrollTop = pct * (target.scrollHeight - target.clientHeight);
+    syncingScroll = false;
+  }
+  inputArea.addEventListener('scroll', () => syncScroll(inputArea, outputArea));
+  outputArea.addEventListener('scroll', () => syncScroll(outputArea, inputArea));
+
+  // Auto-fix on paste into input area
+  inputArea.addEventListener('paste', () => {
+    // Wait for paste to complete
+    setTimeout(runFix, 50);
+  });
+</script>
+</body>
+</html>
